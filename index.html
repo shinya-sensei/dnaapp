@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shinyaメソッド DNA解析ツール</title>
+  <style>
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #000; color: #fff; padding: 20px; margin: 0; }
+    .container { max-width: 480px; margin: 0 auto; background: #1a1a1a; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    h2 { text-align: center; font-size: 1.5em; margin-bottom: 20px; letter-spacing: 2px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+    .opener { background: #2a2a2a; padding: 15px; border-radius: 8px; font-size: 0.9em; line-height: 1.6; margin-bottom: 25px; border-left: 4px solid #d4af37; }
+    .input-group { margin-bottom: 20px; }
+    label { display: block; font-size: 0.85em; color: #aaa; margin-bottom: 5px; }
+    input[type="text"], input[type="file"] { width: 100%; padding: 12px; background: #333; border: 1px solid #444; color: #fff; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+    button { width: 100%; background: #d4af37; color: #000; padding: 16px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 10px; }
+    button:disabled { background: #555; color: #888; }
+    #result { margin-top: 25px; padding: 20px; background: #000; border: 1px solid #333; border-radius: 8px; display: none; white-space: pre-wrap; font-size: 0.95em; line-height: 1.8; color: #e0e0e0; }
+    
+    .loader-container { display: none; text-align: center; margin: 30px 0; }
+    .loader-text { color: #d4af37; font-size: 1em; font-weight: bold; margin-bottom: 10px; animation: blink 1.5s infinite; }
+    .loader-subtext { color: #888; font-size: 0.8em; }
+    @keyframes blink { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+    
+    .typing-cursor::after { content: '▋'; animation: cursor-blink 1s infinite; color: #d4af37; margin-left: 5px; }
+    @keyframes cursor-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>DNA解析ツール</h2>
+    <div class="opener">
+      こんにちは！DNA解析ツールです。<br>
+      【スタート方法】<br>
+      ① 検査結果の画像をアップロードしてください。<br>
+      ② チャット欄に「性別・年齢」を入力して送信してください。<br>
+      （例：女性44歳）
+    </div>
+    <div class="input-group">
+      <label>① 解析結果画像</label>
+      <input type="file" id="imageInput" accept="image/*">
+    </div>
+    <div class="input-group">
+      <label>② 性別・年齢</label>
+      <input type="text" id="userData" placeholder="例：女性44歳">
+    </div>
+    <button id="btn" onclick="run()">生化学的解析を開始</button>
+    
+    <div id="loader" class="loader-container">
+      <div class="loader-text">DNAから総合リスク判定中</div>
+      <div class="loader-subtext">結果をあらゆる角度から分析しています</div>
+    </div>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    async function run() {
+      const userData = document.getElementById('userData').value;
+      const file = document.getElementById('imageInput').files[0];
+      if (!userData || !file) {
+        alert('画像と属性（性別・年齢）の両方を入力してください。');
+        return;
+      }
+      
+      // ボタンとローダーの制御
+      document.getElementById('btn').disabled = true;
+      document.getElementById('btn').innerText = '解析を実行しています...';
+      document.getElementById('loader').style.display = 'block';
+      const resultDiv = document.getElementById('result');
+      resultDiv.style.display = 'none';
+      resultDiv.innerText = ''; 
+      resultDiv.classList.remove('typing-cursor');
+
+      // 画像をBase64に変換
+      const imageData = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve({
+          data: e.target.result.split(',')[1],
+          mimeType: file.type
+        });
+        reader.readAsDataURL(file);
+      });
+
+      // 送信するデータのパッケージ作成
+      const requestBody = {
+        userData: userData,
+        imageData: imageData
+      };
+
+      // ==========================================================
+      // ★ ここにGASのデプロイURL（https://script.google.com/...）を貼る ★
+      // ==========================================================
+      const gasUrl = "https://script.google.com/macros/s/AKfycbxDQndHMSeHLH1a5o_WRGrClMriq-om_NKeLmT8YvaZj5S-oXfshSE4M2ccridF4ppg/exec";
+
+      try {
+        // GAS（外部API）へ通信を送る
+        const response = await fetch(gasUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain', // GASの仕様上、text/plain推奨
+          },
+          body: JSON.stringify(requestBody),
+          redirect: 'follow'
+        });
+
+        const json = await response.json();
+
+        // 成功した場合のアニメーション表示
+        if (json.status === "success") {
+          document.getElementById('loader').style.display = 'none';
+          document.getElementById('btn').disabled = false;
+          document.getElementById('btn').innerText = 'DNA結果分析中';
+          
+          resultDiv.style.display = 'block';
+          resultDiv.classList.add('typing-cursor');
+          
+          let i = 0;
+          const resText = json.result;
+          const speed = 15; 
+          
+          function typeWriter() {
+            if (i < resText.length) {
+              resultDiv.innerHTML += resText.charAt(i);
+              i++;
+              setTimeout(typeWriter, speed);
+            } else {
+              resultDiv.classList.remove('typing-cursor'); 
+            }
+          }
+          typeWriter();
+        } else {
+          throw new Error(json.message);
+        }
+
+      } catch (err) {
+        alert('通信エラーが発生しました。時間を置いて再度お試しください。');
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('btn').disabled = false;
+        document.getElementById('btn').innerText = 'DNA結果分析中';
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
